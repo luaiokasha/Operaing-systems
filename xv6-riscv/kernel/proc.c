@@ -681,3 +681,27 @@ pause_system(int seconds)
   yield();
   return 0;
 }
+
+int
+kill_system(void)
+{
+  struct proc* p;
+  int pid;
+
+  for(p=proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock);
+    pid = p->pid;
+    release(&p->lock);
+
+    if (pid == 1 || pid == 2){
+      continue;
+    }
+
+    if (kill(pid) < 0){
+      return -1;
+    }
+  }
+
+  yield();
+  return 0;
+}
