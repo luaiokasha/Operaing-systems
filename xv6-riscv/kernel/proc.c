@@ -10,6 +10,9 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
+//pause_system syscall
+uint64 pause_termination = 0;
+
 struct proc *initproc;
 
 int nextpid = 1;
@@ -448,6 +451,14 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
+
+        if (ticks < pause_termination){
+          if (p->pid != 1 p->pid != 2){
+            release(&p->lock);
+            continue;
+          }
+        }
+
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
@@ -653,4 +664,20 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+
+int
+pause_system(int seconds)
+{
+
+  if (seconds < 0)
+    return -1;
+  
+  acquire(&tickslock);
+  pause_termination = ticks + (10*seconds);
+  release(&tickslock);
+
+  yield();
+  return 0;
 }
