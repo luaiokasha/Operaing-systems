@@ -246,7 +246,9 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-
+  acquire(&tickslock);
+  p->last_runnable_time = ticks;
+  release(&tickslock);
   release(&p->lock);
 }
 
@@ -316,6 +318,10 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  acquire(&tickslock);
+  np->last_runnable_time = ticks;
+  release(&tickslock);
+
   release(&np->lock);
 
   return pid;
@@ -514,8 +520,43 @@ SJF_Scheduler(void){
         c->proc = 0;
     }  
       release(&candidate_p->lock);
-    
+}
 
+void
+FCFS_Scheduler(void){
+    struct proc* p;
+    struct cpu* c = mycpu();
+    struct proc* candidate_p;
+    c->proc = 0;
+
+    for(;;){
+      intr_on();
+      candidate_p = 0;
+
+      for(p = proc; p < &proc[NPROC]; p++){
+        acquire(&p->lock);
+        if(p->state == RUNNABLE){
+          if(candidate_p == 0 || p->last_runnable_time < candidate_p->last_runnable_time){
+            candidate_p = p;
+          }
+        }
+        release(&p->lock);
+      }
+
+      if (candidate_p == 0)
+        continue;
+
+      acquire(&candidate_p->lock);
+      if(candidate_p->state == RUNNABLE){
+        
+        candidate_p->state = RUNNING;
+        c->proc = candidate_p;
+        
+        swtch(&c->context, &candidate_p->context);
+          
+        c->proc = 0;
+      }  
+      release(&candidate_p->lock);
 }
 
 
@@ -553,6 +594,10 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  acquire(&tickslock);
+  p->last_runnable_time = ticks;
+  release(&tickslock);
+
   sched();
   release(&p->lock);
 }
@@ -621,6 +666,10 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        acquire(&tickslock);
+        p->last_runnable_time = ticks;
+        release(&tickslock);
+
       }
       release(&p->lock);
     }
@@ -642,6 +691,9 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
+        acquire(&tickslock);
+        p->last_runnable_time = ticks;
+        release(&tickslock);
       }
       release(&p->lock);
       return 0;
