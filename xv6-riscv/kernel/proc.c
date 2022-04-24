@@ -14,7 +14,7 @@ struct proc proc[NPROC];
 uint64 pause_termination = 0;
 
 struct proc *initproc;
-
+const int rate = 5;
 int nextpid = 1;
 struct spinlock pid_lock;
 
@@ -474,6 +474,50 @@ scheduler(void)
     }
   }
 }
+
+
+void
+SJF_Scheduler(void){
+    struct proc* p;
+    struct cpu* c = mycpu();
+    struct proc* candidate_p;
+    c->proc = 0;
+
+    for(;;){
+      intr_on();
+      candidate_p = 0;
+
+      for(p = proc; p < &proc[NPROC]; p++){
+        acquire(&p->lock);
+        if(p->state == RUNNABLE){
+          if(candidate_p == 0 || p->mean_ticks < candidate_p->mean_ticks){
+            candidate_p = p;
+          }
+        }
+        release(&p->lock);
+      }
+
+      if (candidate_p == 0)
+        continue;
+
+      acquire(&candidate_p->lock);
+      if(candidate_p->state == RUNNABLE){
+        
+        candidate_p->state = RUNNING;
+        c->proc = candidate_p;
+        
+        swtch(&c->context, &candidate_p->context);
+        
+        candidate_p->last_ticks = ticks - candidate_p->last_ticks;
+        candidate_p->mean_ticks = ((10-rate)*(candidate_p->mean_ticks) + (candidate_p->last_ticks)*(rate))/10;
+        
+        c->proc = 0;
+    }  
+      release(&candidate_p->lock);
+    
+
+}
+
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
